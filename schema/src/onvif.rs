@@ -4964,7 +4964,7 @@ pub struct Space1DDescription {
 
 impl Validate for Space1DDescription {}
 
-#[derive(Default, PartialEq, Debug, YaSerialize, YaDeserialize)]
+#[derive(Default, PartialEq, Clone, Debug, YaSerialize, YaDeserialize)]
 #[yaserde(prefix = "tt", namespace = "tt: http://www.onvif.org/ver10/schema")]
 pub struct Ptzspeed {
     // Pan and tilt speed. The x component corresponds to pan and the y

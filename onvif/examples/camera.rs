@@ -1,5 +1,6 @@
 use log::debug;
 use onvif::{schema, soap};
+use std::{thread, time};
 use structopt::StructOpt;
 use url::Url;
 
@@ -53,6 +54,23 @@ enum Cmd {
 
     /// Gets information about the currently enabled and supported video analytics.
     GetAnalytics,
+
+    // Sends a Zoom command follows by a stop
+    MoveContinuousStop {
+        #[structopt(allow_hyphen_values = true)]
+        pan: f64,
+        tilt: f64,
+        zoom: f64,
+    },
+
+    // Sends a ContinuousMove command with a timeout
+    MoveContinuousTimeout {
+        #[structopt(allow_hyphen_values = true)]
+        pan: f64,
+        tilt: f64,
+        zoom: f64,
+        timeout: f64
+    },
 
     // Try to get any possible information
     GetAll,
@@ -395,6 +413,92 @@ async fn get_status(clients: &Clients) {
         );
     }
 }
+async fn move_continuous_stop(clients: &Clients, pan: f64, tilt: f64, zoom: f64) {
+    if let Some(ref ptz) = clients.ptz {
+        let media_client = clients.media.as_ref().unwrap();
+        let profile = &schema::media::get_profiles(media_client, &Default::default())
+            .await
+            .unwrap()
+            .profiles[0];
+
+        let response = &schema::ptz::continuous_move(
+            ptz,
+            &schema::ptz::ContinuousMove {
+                profile_token: schema::onvif::ReferenceToken(profile.token.0.clone()),
+                velocity: schema::onvif::Ptzspeed {
+                    pan_tilt: Some(schema::common::Vector2D {
+                        x: pan,
+                        y: tilt,
+                        space: None,
+                    },),
+                    zoom: Some(schema::common::Vector1D {
+                        x: zoom,
+                        space: None,
+                    }),
+                },
+                timeout: None,
+            },
+        )
+        .await
+        .unwrap();
+        println!(
+            "Response for continuous move: {:#?}",
+            response);
+        let ten_millis = time::Duration::from_millis(500);
+        thread::sleep(ten_millis);
+
+        let response = &schema::ptz::stop(
+            ptz,
+            &schema::ptz::Stop {
+                profile_token: schema::onvif::ReferenceToken(profile.token.0.clone()),
+                pan_tilt: None,
+                zoom: Some(true),
+            },
+        )
+        .await
+        .unwrap();
+        println!(
+            "Response for stop: {:#?}",
+            response);
+    }
+}
+
+async fn move_continuous_timeout(clients: &Clients, pan: f64, tilt: f64, zoom: f64, timeout: f64) {
+    if let Some(ref ptz) = clients.ptz {
+        let media_client = clients.media.as_ref().unwrap();
+        let profile = &schema::media::get_profiles(media_client, &Default::default())
+            .await
+            .unwrap()
+            .profiles[0];
+
+        println!(
+            "Response for continuous move: {:#?}",
+            &schema::ptz::continuous_move(
+                ptz,
+                &schema::ptz::ContinuousMove {
+                    profile_token: schema::onvif::ReferenceToken(profile.token.0.clone()),
+                    velocity: schema::onvif::Ptzspeed {
+                        pan_tilt: Some(schema::common::Vector2D {
+                            x: pan,
+                            y: tilt,
+                            space: None,
+                        },),
+                        zoom: Some(schema::common::Vector1D {
+                            x: zoom,
+                            space: None,
+                        },),
+                    },
+                    timeout: Some(xsd_types::types::duration::Duration {
+                        seconds: timeout,
+                        ..Default::default()
+                    })
+                }
+            )
+            .await
+            .unwrap()
+        );
+    }
+}
 
 #[tokio::main]
 async fn main() {
@@ -414,6 +518,8 @@ async fn main() {
         Cmd::EnableAnalytics => enable_analytics(&clients).await,
         Cmd::GetAnalytics => get_analytics(&clients).await,
         Cmd::GetStatus => get_status(&clients).await,
+        Cmd::MoveContinuousStop { pan, tilt, zoom } => move_continuous_stop(&clients, pan, tilt, zoom).await,
+        Cmd::MoveContinuousTimeout { pan, tilt, zoom, timeout } => move_continuous_timeout(&clients, pan, tilt, zoom, timeout).await,
         Cmd::GetAll => {
             get_system_date_and_time(&clients).await;
             get_capabilities(&clients).await;
