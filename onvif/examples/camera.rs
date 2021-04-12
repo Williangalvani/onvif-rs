@@ -56,14 +56,18 @@ enum Cmd {
     GetAnalytics,
 
     // Sends a Zoom command follows by a stop
-    ZoomContinuousStop {
+    MoveContinuousStop {
         #[structopt(allow_hyphen_values = true)]
+        pan: f64,
+        tilt: f64,
         zoom: f64,
     },
 
     // Sends a ContinuousMove command with a timeout
-    ZoomContinuousTimeout {
+    MoveContinuousTimeout {
         #[structopt(allow_hyphen_values = true)]
+        pan: f64,
+        tilt: f64,
         zoom: f64,
         timeout: f64
     },
@@ -409,7 +413,7 @@ async fn get_status(clients: &Clients) {
         );
     }
 }
-async fn set_zoom_continuous_stop(clients: &Clients, zoom: f64) {
+async fn move_continuous_stop(clients: &Clients, pan: f64, tilt: f64, zoom: f64) {
     if let Some(ref ptz) = clients.ptz {
         let media_client = clients.media.as_ref().unwrap();
         let profile = &schema::media::get_profiles(media_client, &Default::default())
@@ -422,7 +426,11 @@ async fn set_zoom_continuous_stop(clients: &Clients, zoom: f64) {
             &schema::ptz::ContinuousMove {
                 profile_token: schema::onvif::ReferenceToken(profile.token.0.clone()),
                 velocity: schema::onvif::Ptzspeed {
-                    pan_tilt: None,
+                    pan_tilt: Some(schema::common::Vector2D {
+                        x: pan,
+                        y: tilt,
+                        space: None,
+                    },),
                     zoom: Some(schema::common::Vector1D {
                         x: zoom,
                         space: None,
@@ -455,7 +463,7 @@ async fn set_zoom_continuous_stop(clients: &Clients, zoom: f64) {
     }
 }
 
-async fn set_zoom_continuous_timeout(clients: &Clients, zoom: f64, timeout: f64) {
+async fn move_continuous_timeout(clients: &Clients, pan: f64, tilt: f64, zoom: f64, timeout: f64) {
     if let Some(ref ptz) = clients.ptz {
         let media_client = clients.media.as_ref().unwrap();
         let profile = &schema::media::get_profiles(media_client, &Default::default())
@@ -470,7 +478,11 @@ async fn set_zoom_continuous_timeout(clients: &Clients, zoom: f64, timeout: f64)
                 &schema::ptz::ContinuousMove {
                     profile_token: schema::onvif::ReferenceToken(profile.token.0.clone()),
                     velocity: schema::onvif::Ptzspeed {
-                        pan_tilt: None,
+                        pan_tilt: Some(schema::common::Vector2D {
+                            x: pan,
+                            y: tilt,
+                            space: None,
+                        },),
                         zoom: Some(schema::common::Vector1D {
                             x: zoom,
                             space: None,
@@ -506,8 +518,8 @@ async fn main() {
         Cmd::EnableAnalytics => enable_analytics(&clients).await,
         Cmd::GetAnalytics => get_analytics(&clients).await,
         Cmd::GetStatus => get_status(&clients).await,
-        Cmd::ZoomContinuousStop { zoom } => set_zoom_continuous_stop(&clients, zoom).await,
-        Cmd::ZoomContinuousTimeout { zoom, timeout } => set_zoom_continuous_timeout(&clients, zoom, timeout).await,
+        Cmd::MoveContinuousStop { pan, tilt, zoom } => move_continuous_stop(&clients, pan, tilt, zoom).await,
+        Cmd::MoveContinuousTimeout { pan, tilt, zoom, timeout } => move_continuous_timeout(&clients, pan, tilt, zoom, timeout).await,
         Cmd::GetAll => {
             get_system_date_and_time(&clients).await;
             get_capabilities(&clients).await;
